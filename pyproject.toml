@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mail_monitor"
+dynamic = ["version"]
+description = "simple util to monitor new emails over IMAP"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.8"
+authors = [
+    {name = "jarbasAI", email = "jarbasai@mailfence.com"},
+]
+dependencies = [
+    "html2text",
+]
+
+[project.urls]
+Homepage = "https://github.com/JarbasAl/mail_monitor"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools]
+packages = ["mail_monitor"]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "mail_monitor.version.__version__"}
