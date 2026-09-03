@@ -2,10 +2,53 @@ import imaplib
 import email
 import email.header
 import email.utils
+from html.parser import HTMLParser
 from time import sleep, mktime
 from threading import Thread, Event
-import html2text
 
+
+class _HTMLTextExtractor(HTMLParser):
+    """Minimal stdlib HTML-to-text extractor.
+
+    Not a full renderer: drops tags/attributes/styles and keeps the
+    visible text, which is all `EmailClient.get_body` needs for an
+    HTML-only email.
+    """
+
+    _SKIP_TAGS = {"script", "style", "head", "title"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self._chunks = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._SKIP_TAGS:
+            self._skip_depth += 1
+        elif tag in ("br", "p", "div", "tr", "li"):
+            self._chunks.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in self._SKIP_TAGS and self._skip_depth:
+            self._skip_depth -= 1
+
+    def handle_data(self, data):
+        if not self._skip_depth and data:
+            self._chunks.append(data)
+
+    def get_text(self):
+        text = "".join(self._chunks)
+        lines = [" ".join(line.split()) for line in text.splitlines()]
+        lines = [line for line in lines if line]
+        return "\n".join(lines).strip()
+
+
+def html_to_text(html):
+    """Convert an HTML string to plain text using only the stdlib."""
+    parser = _HTMLTextExtractor()
+    parser.feed(html or "")
+    parser.close()
+    return parser.get_text()
 
 
 class EmailClient:
@@ -85,17 +128,47 @@ class EmailClient:
 
     @staticmethod
     def get_body(msg):
-        payload = msg.get_payload()
-        if isinstance(payload, list):
-            payload = payload[-1]
-            payload = html2text.html2text(str(payload))
-            payload = [l for l in payload.split("\n") if
-                       not l.startswith("Content-Type:")]
-            payload = "\n".join(payload)
-        return payload.strip()
+        if msg.is_multipart():
+            plain_part = None
+            html_part = None
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                if part.get_content_maintype() == "multipart":
+                    continue
+                if content_type == "text/plain" and plain_part is None:
+                    plain_part = part
+                elif content_type == "text/html" and html_part is None:
+                    html_part = part
+            if plain_part is not None:
+                return _get_part_text(plain_part).strip()
+            if html_part is not None:
+                return html_to_text(_get_part_text(html_part)).strip()
+            payload = msg.get_payload()
+            if isinstance(payload, list) and payload:
+                return _get_part_text(payload[-1]).strip()
+            return str(payload).strip()
+
+        content_type = msg.get_content_type()
+        text = _get_part_text(msg)
+        if content_type == "text/html":
+            return html_to_text(text).strip()
+        return text.strip()
 
     def send(self, subject, email, body):
         raise NotImplementedError
+
+
+def _get_part_text(part):
+    """Decode a message/part payload to a str, handling charset/CTE."""
+    payload = part.get_payload(decode=True)
+    if payload is None:
+        payload = part.get_payload()
+        return payload if isinstance(payload, str) else str(payload)
+    charset = part.get_content_charset() or "utf-8"
+    try:
+        return payload.decode(charset, errors="replace")
+    except (LookupError, TypeError):
+        return payload.decode("utf-8", errors="replace")
 
 
 class EmailMonitor(Thread):
