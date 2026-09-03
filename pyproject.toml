@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mail_monitor"
+dynamic = ["version"]
+description = "Simple util to monitor an IMAP mailbox for new email"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+authors = [{name = "JarbasAi", email = "jarbasai@mailfence.com"}]
+keywords = ["email", "imap", "monitor"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Communications :: Email",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/JarbasAl/mail_monitor"
+
+[tool.setuptools.dynamic]
+version = {attr = "mail_monitor.version.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["mail_monitor*"]
+exclude = ["tests*", "test*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
